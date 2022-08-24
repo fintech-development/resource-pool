@@ -26,6 +26,9 @@ data Pool a = Pool
   , reaperRef    :: !(IORef ())
   }
 
+instance Show (Pool a) where
+    show Pool {} = "<Pool>"
+
 getPoolTimeoutConfig :: Pool a -> Maybe TimeoutConfig 
 getPoolTimeoutConfig = poolTimeoutConfig . poolConfig
 
