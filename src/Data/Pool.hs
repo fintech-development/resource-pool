@@ -24,7 +24,6 @@ module Data.Pool
 
 import Control.Concurrent
 import Control.Exception
-
 import Data.Pool.Internal
 import Data.Time (NominalDiffTime)
 
@@ -65,7 +64,7 @@ takeResource pool = mask_ $ do
   if available stripe == 0
     then do
       q <- newEmptyMVar
-      putMVar (stripeVar lp) $! stripe { queueR = Queue q (queueR stripe) }
+      putMVar (stripeVar lp) $! stripe { queueR = Queue q (queueR stripe), initialized = initialized stripe + 1 }
       waitForResource (getPoolTimeoutConfig pool) (stripeVar lp) q >>= \case
         Just a  -> pure (a, lp)
         Nothing -> do
@@ -118,12 +117,13 @@ takeAvailableResource
   -> IO (a, LocalPool a)
 takeAvailableResource pool lp stripe = case cache stripe of
   [] -> do
-    putMVar (stripeVar lp) $! stripe { available = available stripe - 1 }
+    putMVar (stripeVar lp) $! stripe { available = available stripe - 1, initialized = initialized stripe + 1 }
     a <- createResource (poolConfig pool) `onException` restoreSize (stripeVar lp)
     pure (a, lp)
   Entry a _ : as -> do
     putMVar (stripeVar lp) $! stripe
      { available = available stripe - 1
+     , initialized = initialized stripe + 1
      , cache = as
      }
     pure (a, lp)
