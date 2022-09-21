@@ -44,10 +44,10 @@ import Data.Time (NominalDiffTime)
 -- It probably goes without saying that you should never manually destroy a
 -- pooled resource, as doing so will almost certainly cause a subsequent user
 -- (who expects the resource to be valid) to throw an exception.
-withResource :: Pool a -> (a -> IO r) -> IO r
+withResource :: Pool a -> ((a, Int) -> IO r) -> IO r
 withResource pool act = mask $ \unmask -> do
   (res, localPool) <- takeResource pool
-  r                <- unmask (act res) `onException` destroyResource pool localPool res
+  r                <- unmask (act (res, stripeId localPool)) `onException` destroyResource pool localPool res
   putResource localPool res
   pure r
 

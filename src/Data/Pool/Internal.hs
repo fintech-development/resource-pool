@@ -1,7 +1,6 @@
 {-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# OPTIONS_HADDOCK not-home #-}
-{-# LANGUAGE StandaloneDeriving #-}
 
 -- | Internal implementation details for "Data.Pool".
 --
