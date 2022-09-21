@@ -1,5 +1,4 @@
 {-# LANGUAGE DeriveAnyClass #-}
-{-# LANGUAGE RecordWildCards #-}
 {-# OPTIONS_HADDOCK not-home #-}
 
 -- | Internal implementation details for "Data.Pool".
@@ -41,14 +40,10 @@ data LocalPool a = LocalPool
   , cleanerRef :: !(IORef ())
   }
 
-getInitializedResources :: Pool a -> IO Int
-getInitializedResources Pool {..} = sum <$> mapM (fmap initialized . readMVar . stripeVar) localPools
-
 -- | Stripe of a resource pool. If @available@ is 0, the list of threads waiting
 -- for a resource (each with an associated 'MVar') is @queue ++ reverse queueR@.
 data Stripe a = Stripe
   { available :: !Int
-  , initialized :: !Int
   , cache     :: ![Entry a]
   , queue     :: !(Queue a)
   , queueR    :: !(Queue a)
@@ -122,7 +117,6 @@ newPool pc = do
     ref <- newIORef ()
     stripe <- newMVar Stripe
       { available = poolMaxResources pc `quotCeil` numStripes
-      , initialized = 0
       , cache     = []
       , queue     = Empty
       , queueR    = Empty
@@ -234,7 +228,7 @@ restoreSize :: MVar (Stripe a) -> IO ()
 restoreSize mstripe = uninterruptibleMask_ $ do
   -- 'uninterruptibleMask_' is used since 'takeMVar' might block.
   stripe <- takeMVar mstripe
-  putMVar mstripe $! stripe {available = available stripe + 1, initialized = initialized stripe - 1}
+  putMVar mstripe $! stripe {available = available stripe + 1}
 
 -- | Free resource entries in the stripes that fulfil a given condition.
 cleanStripe
@@ -249,7 +243,7 @@ cleanStripe isStale free mstripe = mask $ \unmask -> do
     let (stale, fresh) = L.partition isStale (cache stripe)
         -- There's no need to update 'available' here because it only tracks
         -- the number of resources taken from the pool.
-        newStripe = stripe {cache = fresh, initialized = length fresh}
+        newStripe = stripe {cache = fresh}
     newStripe `seq` pure (newStripe, map entry stale)
   -- We need to ignore exceptions in the 'free' function, otherwise if an
   -- exception is thrown half-way, we leak the rest of the resources. Also,
@@ -277,7 +271,6 @@ signal stripe ma = if available stripe == 0
         pure $ Entry a now : cache stripe
       Nothing -> pure $ cache stripe
     pure $! stripe { available = available stripe + 1
-                   , initialized = length newCache
                    , cache = newCache
                    }
   where
@@ -288,7 +281,6 @@ signal stripe ma = if available stripe == 0
           pure [Entry a now]
         Nothing -> pure []
       pure $! Stripe { available = 1
-                     , initialized = length newCache
                      , cache = newCache
                      , queue = Empty
                      , queueR = Empty
